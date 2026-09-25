@@ -63,19 +63,20 @@ COMMON_DISTRICTS = [
 st.markdown(
     """
 <style>
+.stApp { background: #f4f6f0; }
 
 .market-header {
     background: linear-gradient(
         135deg,
-        #0f5d2e 0%,
-        #228b45 55%,
-        #43a047 100%
+        #1E5620 0%,
+        #2D7D32 55%,
+        #E5A93C 100%
     );
     color: white;
-    padding: 30px 34px;
+    padding: 32px 36px;
     border-radius: 22px;
-    margin-bottom: 22px;
-    box-shadow: 0 10px 30px rgba(15,93,46,0.18);
+    margin-bottom: 24px;
+    box-shadow: 0 12px 32px rgba(30,86,32,0.2);
 }
 
 .market-header h1 {
@@ -86,7 +87,7 @@ st.markdown(
 
 .market-header p {
     margin: 8px 0 0;
-    opacity: 0.92;
+    color: #F5F5DC;
     font-size: 15px;
 }
 
@@ -99,14 +100,14 @@ st.markdown(
 }
 
 .search-title {
-    color: #172b1b;
+    color: #1E5620;
     font-size: 24px;
     font-weight: 800;
     margin: 0;
 }
 
 .search-subtitle {
-    color: #708074;
+    color: #6D4C41;
     font-size: 13px;
     margin: 4px 0 0;
 }
@@ -125,9 +126,9 @@ st.markdown(
 .filter-panel {
     background: white;
     padding: 18px 20px 20px;
-    border-radius: 16px;
-    border: 1px solid #dbe7dd;
-    box-shadow: 0 8px 24px rgba(20, 57, 28, 0.06);
+    border-radius: 18px;
+    border: 1px solid #dce9de;
+    box-shadow: 0 8px 24px rgba(30, 86, 32, 0.06);
     margin-bottom: 22px;
 }
 

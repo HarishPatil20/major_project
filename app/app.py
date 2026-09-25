@@ -55,10 +55,59 @@ initialize_session()
 
 st.markdown(
     """
+<head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
 <style>
-.main {
-    background-color: #f7faf7;
+:root {
+    --primary-green: #1E5620;
+    --primary-green-light: #2D7D32;
+    --harvest-gold: #E5A93C;
+    --harvest-gold-dark: #D97706;
+    --sky-blue: #38BDF8;
+    --earth-dark: #4A3525;
+    --earth-medium: #6D4C41;
+    --earth-bg: #F4F6F0;
+    --glass-bg: rgba(255, 255, 255, 0.92);
+    --glass-border: rgba(255, 255, 255, 0.45);
 }
+
+html, body, [class*="css"] {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+}
+
+.main {
+    background-color: #F4F6F0;
+}
+
+/* Custom Gradients */
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #1E5620 0%, #2D7D32 100%) !important;
+}
+.bg-gradient-earth {
+    background: linear-gradient(135deg, #4A3525 0%, #6D4C41 100%) !important;
+}
+.bg-gradient-harvest {
+    background: linear-gradient(135deg, #D97706 0%, #E5A93C 100%) !important;
+}
+.bg-gradient-success {
+    background: linear-gradient(135deg, #15803D 0%, #22C55E 100%) !important;
+}
+.bg-gradient-sky {
+    background: linear-gradient(135deg, #0284C7 0%, #38BDF8 100%) !important;
+}
+
+/* Glassmorphism Card */
+.glass-card {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(30, 86, 32, 0.08);
+}
+
 .brand {
     text-align: center;
     padding: 35px 0 20px 0;
@@ -66,32 +115,32 @@ st.markdown(
 .brand-title {
     font-size: 42px;
     font-weight: 800;
-    color: #176b2c;
+    color: #1E5620;
     margin-bottom: 8px;
 }
 .brand-subtitle {
     font-size: 18px;
     font-weight: 600;
-    color: #4CAF50;
+    color: #E5A93C;
 }
 .auth-container {
     max-width: 900px;
     margin: auto;
 }
 .auth-hero {
-    background: linear-gradient(135deg, #123524 0%, #1f6b45 58%, #66a86f 100%);
+    background: linear-gradient(135deg, #1E5620 0%, #2D7D32 60%, #E5A93C 100%);
     border-radius: 24px;
     color: white;
     padding: clamp(24px, 4vw, 44px);
     margin: 0 auto 24px;
     max-width: 1180px;
-    box-shadow: 0 18px 42px rgba(18, 53, 36, 0.2);
+    box-shadow: 0 18px 42px rgba(30, 86, 32, 0.22);
 }
 .auth-hero-copy {
     padding: 8px 0;
 }
 .auth-hero-eyebrow {
-    color: #d5f5d8;
+    color: #F5F5DC;
     font-size: 12px;
     font-weight: 800;
     letter-spacing: 1.5px;
@@ -132,7 +181,7 @@ st.markdown(
 }
 .reset-title {
     text-align: center;
-    color: #2E7D32;
+    color: #1E5620;
     font-weight: 700;
 }
 @media (max-width: 700px) {
@@ -141,8 +190,8 @@ st.markdown(
     .auth-panel { border-radius: 16px; padding: 18px 14px; }
 }
 .security-box {
-    background: #eef8ef;
-    border-left: 5px solid #2e8b45;
+    background: #f4f9f4;
+    border-left: 5px solid #1E5620;
     padding: 15px;
     border-radius: 8px;
     margin-top: 15px;
@@ -186,35 +235,35 @@ def show_authentication():
         <style>
         .stApp {{
             background:
-                linear-gradient(120deg, rgba(6, 91, 35, .96), rgba(16, 121, 54, .86)),
+                linear-gradient(120deg, rgba(30, 86, 32, 0.94), rgba(45, 125, 65, 0.88)),
                 url(data:image/png;base64,{image_data});
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
         }}
-        .block-container {{ max-width: 960px; padding-top: 5vh; }}
-        .login-brand {{ text-align: center; color: white; margin-bottom: 22px; }}
-        .login-mark {{ display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 14px; background: #f4c430; color: #176b2c; font-size: 30px; margin-bottom: 10px; }}
-        .login-brand h1 {{ color: white; font-size: clamp(28px, 4vw, 38px); margin: 0; }}
-        .login-brand p {{ color: #ccebd0; margin: 6px 0 0; font-size: 14px; }}
-        [data-testid="stTabs"] {{ background: rgba(255,255,255,.97); border-radius: 15px; padding: 16px 22px 24px; box-shadow: 0 18px 45px rgba(0,0,0,.2); }}
-        [data-testid="stTabs"] [data-baseweb="tab-list"] {{ justify-content: center; gap: 18px; }}
-        [data-testid="stTabs"] button {{ color: #53705a; font-weight: 700; }}
-        [data-testid="stTabs"] button[aria-selected="true"] {{ color: #16833a; }}
-        [data-testid="stTextInput"] input {{ border-radius: 9px; background: #fbfdfb; }}
-        [data-testid="stButton"] button[kind="primary"] {{ background: linear-gradient(90deg, #1fc52d, #16ae2a); border: 0; border-radius: 9px; min-height: 44px; font-weight: 800; }}
-        .login-security {{ background: #eff5f0; color: #7a8e7e; border-radius: 10px; padding: 11px 13px; margin-top: 17px; font-size: 12px; }}
-        .admin-login-head {{ text-align: center; padding: 4px 0 12px; }}
-        .admin-login-icon {{ display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 50%; background: #18752b; color: white; font-size: 28px; margin-bottom: 9px; }}
-        .admin-login-title {{ color: #172b1b; font-size: 25px; font-weight: 800; }}
-        .admin-login-subtitle {{ color: #7a8e7e; font-size: 13px; margin-top: 4px; }}
-        .admin-demo {{ color: #7a8e7e; text-align: center; font-size: 12px; margin-top: 12px; }}
-        @media (max-width: 600px) {{ .block-container {{ padding: 2rem .7rem; }} [data-testid="stTabs"] {{ padding: 10px 12px 18px; }} }}
+        .block-container {{ max-width: 960px; padding-top: 4vh; }}
+        .login-brand {{ text-align: center; color: white; margin-bottom: 24px; }}
+        .login-mark {{ display: inline-flex; align-items: center; justify-content: center; width: 60px; height: 60px; border-radius: 16px; background: linear-gradient(135deg, #E5A93C, #D97706); color: #1E5620; font-size: 32px; margin-bottom: 12px; box-shadow: 0 8px 20px rgba(229,169,60,0.35); }}
+        .login-brand h1 {{ color: white; font-size: clamp(30px, 4vw, 42px); margin: 0; font-weight: 800; letter-spacing: -0.5px; }}
+        .login-brand p {{ color: #F5F5DC; margin: 6px 0 0; font-size: 15px; font-weight: 500; }}
+        [data-testid="stTabs"] {{ background: rgba(255,255,255,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 20px; padding: 22px 26px 28px; box-shadow: 0 20px 50px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.6); }}
+        [data-testid="stTabs"] [data-baseweb="tab-list"] {{ justify-content: center; gap: 14px; background: #f0f5f1; padding: 6px; border-radius: 12px; }}
+        [data-testid="stTabs"] button {{ color: #4A3525; font-weight: 700; border-radius: 9px; transition: all 0.2s ease; }}
+        [data-testid="stTabs"] button[aria-selected="true"] {{ background: #ffffff !important; color: #1E5620 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }}
+        [data-testid="stTextInput"] input {{ border-radius: 10px; background: #fbfdfb; border: 1px solid #d4e3d6; font-family: inherit; }}
+        [data-testid="stButton"] button[kind="primary"] {{ background: linear-gradient(135deg, #1E5620 0%, #2D7D32 100%); border: 0; border-radius: 10px; min-height: 46px; font-weight: 800; font-size: 15px; box-shadow: 0 6px 18px rgba(30,86,32,0.25); }}
+        .login-security {{ background: #f0f7f1; color: #3e5e44; border-radius: 12px; padding: 12px 16px; margin-top: 18px; font-size: 13px; border-left: 4px solid #1E5620; display: flex; align-items: center; gap: 8px; }}
+        .admin-login-head {{ text-align: center; padding: 10px 0 16px; }}
+        .admin-login-icon {{ display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #1E5620, #2D7D32); color: #E5A93C; font-size: 32px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(30,86,32,0.3); }}
+        .admin-login-title {{ color: #1E5620; font-size: 26px; font-weight: 800; }}
+        .admin-login-subtitle {{ color: #6D4C41; font-size: 14px; margin-top: 4px; }}
+        .admin-demo {{ color: #6D4C41; text-align: center; font-size: 12px; margin-top: 14px; font-weight: 500; }}
+        @media (max-width: 600px) {{ .block-container {{ padding: 2rem .7rem; }} [data-testid="stTabs"] {{ padding: 12px 14px 20px; }} }}
         </style>
         <div class="login-brand">
-            <div class="login-mark">♧</div>
+            <div class="login-mark"><i class="fa-solid fa-wheat-awn"></i></div>
             <h1>Smart Crop Advisory</h1>
-            <p>Smart Solutions for Farmers</p>
+            <p>Agricultural Intelligence & Advisory Portal</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -539,9 +588,9 @@ def show_authentication():
         st.markdown(
             """
             <div class="admin-login-head">
-                <div class="admin-login-icon">♢</div>
-                <div class="admin-login-title">Farm Admin</div>
-                <div class="admin-login-subtitle">Sign in to access the admin panel</div>
+                <div class="admin-login-icon">🛡️</div>
+                <div class="admin-login-title">Farm Admin Panel</div>
+                <div class="admin-login-subtitle">Sign in with authorized administrator credentials</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -585,7 +634,7 @@ def show_authentication():
                         st.error(message)
 
         st.markdown(
-            '<div class="admin-demo">🔒 Admin access is protected with OTP verification.</div>',
+            '<div class="admin-demo">🔒 Admin access is protected with 2FA OTP verification.</div>',
             unsafe_allow_html=True,
         )
 
@@ -595,34 +644,46 @@ def show_authentication():
 
     with registration_tab:
 
-        st.subheader("Create Your Account")
-        st.write("Register to access the protected agriculture platform.")
+        st.subheader("🌾 Farmer Registration")
+        st.write("Register your farm details to access AI crop advisory & market insights.")
 
-        full_name = st.text_input(
-            "👤 Full Name",
-            placeholder="Enter your full name",
-            key="register_name",
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            full_name = st.text_input(
+                "👤 Full Name",
+                placeholder="Enter your full name",
+                key="register_name",
+            )
+            reg_mobile = st.text_input(
+                "📱 Phone Number",
+                max_chars=10,
+                placeholder="Enter 10-digit phone number",
+                key="register_mobile",
+            )
+            location = st.text_input(
+                "📍 District / Location",
+                placeholder="e.g. Mandya, Karnataka",
+                key="register_location",
+            )
 
-        reg_mobile = st.text_input(
-            "📱 Mobile Number",
-            max_chars=10,
-            placeholder="Enter your 10-digit mobile number",
-            key="register_mobile",
-        )
-
-        email = st.text_input(
-            "✉️ Email Address",
-            placeholder="example@email.com",
-            key="register_email",
-        )
-
-        reg_password = st.text_input(
-            "🔑 Create Password",
-            type="password",
-            placeholder="Minimum 8 characters",
-            key="register_password",
-        )
+        with col2:
+            aadhaar = st.text_input(
+                "🆔 Aadhaar Number (Optional)",
+                max_chars=12,
+                placeholder="Enter 12-digit Aadhaar number",
+                key="register_aadhaar",
+            )
+            email = st.text_input(
+                "✉️ Email Address",
+                placeholder="example@email.com",
+                key="register_email",
+            )
+            reg_password = st.text_input(
+                "🔑 Create Password",
+                type="password",
+                placeholder="Minimum 8 characters",
+                key="register_password",
+            )
 
         confirm_password = st.text_input(
             "🔐 Confirm Password",
@@ -634,7 +695,7 @@ def show_authentication():
         st.markdown(
             """
 <div class="security-box">
-🔒 Your password is securely hashed before database storage.
+🔒 <b>Pending Approval Notice:</b> New farmer registrations require 2FA OTP verification and approval from the Farm Administrator before full dashboard access is granted.
 </div>
 """,
             unsafe_allow_html=True,
