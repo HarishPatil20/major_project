@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+runs/
+*.cache
+
+# Large ML model files
+*.pt
+*.pth
+*.ckpt
+
+# Python cache
+.pytest_cache/
+
+# Streamlit
+.streamlit/secrets.toml
+dataset/
+rice_detection/RiceLeafAnnotatedDataset/
+rice_detection/RiceDetectionClean/

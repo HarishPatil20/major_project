@@ -1,0 +1,15 @@
+path: C:/CropProject/app/rice_detection/RiceDetectionClean
+train: train/images
+val: valid/images
+test: test/images
+
+nc: 8
+names:
+  0: Bacterial Leaf Blight
+  1: Brown Spot
+  2: Healthy Leaf
+  3: Leaf Blast
+  4: Leaf Scald
+  5: Narrow Brown Leaf Spot
+  6: Neck Blast
+  7: Rice Hispa
