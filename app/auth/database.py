@@ -8,8 +8,14 @@ DB_PATH = BASE_DIR / "users.db"
 
 
 def get_connection():
-    """Create a connection to the SQLite database."""
-    conn = sqlite3.connect(DB_PATH)
+    """Create a connection to the SQLite database.
+
+    A timeout is set so that concurrent writes from Streamlit's rerun-heavy
+    model wait for a lock to clear instead of immediately raising
+    'database is locked' (which is what made some admin edits silently
+    appear to do nothing).
+    """
+    conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -134,12 +140,12 @@ def get_user_by_mobile(mobile):
 
 
 def mark_user_verified(mobile):
-    """Mark the user's mobile/OTP verification as completed."""
+    """Mark the user's mobile/OTP verification as completed and approve member access."""
     conn = get_connection()
 
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE users SET is_verified = 1 WHERE mobile = ?",
+        "UPDATE users SET is_verified = 1, is_approved = 1 WHERE mobile = ?",
         (mobile,)
     )
 

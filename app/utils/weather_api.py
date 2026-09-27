@@ -1,5 +1,6 @@
 import os
 import requests
+import streamlit as st
 from dotenv import load_dotenv
 
 # =========================================================
@@ -22,6 +23,7 @@ BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
 # GET WEATHER
 # =========================================================
 
+@st.cache_data(ttl=600, show_spinner=False)
 def get_weather(city: str = "", latitude: float = None, longitude: float = None) -> dict:
 
     has_coordinates = latitude is not None and longitude is not None
@@ -208,3 +210,43 @@ def get_weather(city: str = "", latitude: float = None, longitude: float = None)
             "success": False,
             "message": f"Unexpected weather error: {e}"
         }
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_auto_location(browser_location=None):
+    """
+    Resolves location coordinates:
+    1. HTML5 Browser Geolocation (if provided)
+    2. IP-based Geolocation (via ip-api.com)
+    3. Default Fallback: Mangalore / Mangaluru (12.9141, 74.8560)
+
+    NOTE: this used to run with no caching at all, which meant every
+    single page rerun (every button click, every navigation back to the
+    Dashboard/Weather page, since the whole page script re-executes each
+    time) made a fresh blocking network call to ip-api.com whenever the
+    browser hadn't granted GPS permission yet - adding up to ~3 extra
+    seconds to *every* rerun, not just the first page load. Caching this
+    for 5 minutes means that IP lookup now happens at most once every 5
+    minutes instead of on every single interaction, which is one of the
+    main causes of the app feeling slow when moving between pages.
+    """
+    if browser_location and isinstance(browser_location, dict):
+        lat = browser_location.get("latitude")
+        lon = browser_location.get("longitude")
+        if lat is not None and lon is not None:
+            return float(lat), float(lon), "Browser GPS"
+
+    try:
+        resp = requests.get("http://ip-api.com/json/", timeout=3)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("status") == "success":
+                lat = data.get("lat")
+                lon = data.get("lon")
+                city = data.get("city", "Mangalore")
+                if lat is not None and lon is not None:
+                    return float(lat), float(lon), f"Auto-Detected ({city})"
+    except Exception:
+        pass
+
+    return 12.9141, 74.8560, "Mangalore (Default)"

@@ -25,13 +25,44 @@ CASSAVA_LABELS = [
     "Healthy"
 ]
 
+# Sourced from the actual Rice classification model's own class names
+# (utils/pipeline/inference.py loads models/rice_classification/best.pt,
+# whose .names are exactly these 10 labels) - not a separate/invented list.
 RICE_LABELS = [
     "Bacterial Leaf Blight",
     "Brown Spot",
-    "Leaf Smut",
-    "Healthy",
-    "Narrow Brown Spot",
-    "Blast"
+    "Healthy Rice Leaf",
+    "Leaf Blast",
+    "Leaf scald",
+    "Narrow Brown Leaf Spot",
+    "Neck_Blast",
+    "Rice Hispa",
+    "Sheath Blight",
+    "Tungro"
+]
+
+# Sourced from the actual Corn classification model's own class names
+# (models/corn_classification/best.pt) - not a separate/invented list.
+CORN_LABELS = [
+    "Blight",
+    "Common_Rust",
+    "Gray_Leaf_Spot",
+    "Healthy"
+]
+
+# Sourced from the actual Arecanut detection model (Bud Borer, Yellow Leaf
+# Disease, Mahali Koleroga, Stem Bleeding, Stem Cracking) and the Arecanut
+# nut-classification model (Chukke Roga, Split Nut) already wired up in
+# utils/pipeline/inference.py - not a separate/invented disease list.
+ARECANUT_LABELS = [
+    "Bud Borer",
+    "Yellow Leaf Disease",
+    "Mahali Koleroga (Kole Roga)",
+    "Stem Bleeding",
+    "Stem Cracking",
+    "Chukke Roga",
+    "Split Nut",
+    "Healthy"
 ]
 
 PLANTVILLAGE_LABELS = [
@@ -104,6 +135,16 @@ DISEASE_LABELS = {
     "Cassava": CASSAVA_LABELS,          # 5 classes
     "Rice": RICE_LABELS,                # 6 classes (from your screenshot)
     "PlantVillage": PLANTVILLAGE_LABELS,  # ~38 classes
+
+    # Lowercase aliases: the Supported Species Info page looks these up
+    # using its own lowercase species keys (e.g. "rice", "cassava"), which
+    # never matched the capitalized keys above - so those two crops' known
+    # diseases were silently always empty on that page. Adding the
+    # lowercase aliases fixes that without changing anything else.
+    "cassava": CASSAVA_LABELS,
+    "rice": RICE_LABELS,
+    "arecanut": ARECANUT_LABELS,
+    "corn": CORN_LABELS,
 }
 
 # ----------------------------------------------------

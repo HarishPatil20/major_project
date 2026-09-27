@@ -1,7 +1,8 @@
 import os
 from pathlib import Path
 
-from PIL import Image
+import numpy as np
+from PIL import Image, ImageOps, ImageEnhance
 from ultralytics import YOLO
 
 
@@ -31,13 +32,36 @@ class InferencePipeline:
         }
 
         # ==================================================
-        # ARECANUT CLASSIFICATION MODEL
+        # CLASSIFICATION REFINEMENT MODELS (second-opinion models
+        # that re-examine the detected region and give a more
+        # specific/accurate disease read than the detection model
+        # alone)
         # ==================================================
 
         self.classification_model_paths = {
 
             "Arecanut":
-                str(app_dir / "models" / "arecanut_classification" / "best.pt")
+                str(app_dir / "models" / "arecanut_classification" / "best.pt"),
+
+            "Rice":
+                str(app_dir / "models" / "rice_classification" / "best.pt"),
+
+            "Corn":
+                str(app_dir / "models" / "corn_classification" / "best.pt")
+        }
+
+        # The Arecanut classification model is trained ONLY on nut images
+        # and can only ever output one of 4 nut classes (Good / Chukke
+        # roga / Kole roga / Split nut). Its output is only meaningful
+        # when the YOLO detection itself found a nut region - otherwise
+        # a leaf, trunk, foot or bud photo gets forced into a nut label
+        # that has nothing to do with what was actually detected (e.g. a
+        # leaf photo showing "Split nut"). This set gates when the
+        # classifier's result is trusted; it does not change the
+        # classifier or its weights.
+        self.nut_related_detections = {
+            "Healthy Nut",
+            "Mahali Koleroga"
         }
 
         # ==================================================
@@ -160,19 +184,22 @@ class InferencePipeline:
         print("=" * 60)
 
     # ======================================================
-    # ARECANUT CLASSIFICATION
+    # CLASSIFICATION REFINEMENT (shared by Arecanut/Rice/Corn -
+    # each crop's own classification model reports its own class
+    # names directly from the model file, so no manual class-name
+    # mapping is needed here, unlike the detection models above)
     # ======================================================
 
-    def classify_arecanut(self, image):
+    def run_classification(self, crop_type, image):
 
-        if "Arecanut" not in self.classification_models:
+        if crop_type not in self.classification_models:
 
             return {
                 "class_name": "Unknown",
                 "confidence": 0.0
             }
 
-        model = self.classification_models["Arecanut"]
+        model = self.classification_models[crop_type]
 
         try:
 
@@ -220,6 +247,154 @@ class InferencePipeline:
             "confidence": confidence
         }
 
+    def classify_arecanut(self, image):
+        """Kept for backward compatibility - delegates to run_classification."""
+        return self.run_classification("Arecanut", image)
+
+    # ======================================================
+    # UNCERTAINTY ESTIMATION (MC + TTA)
+    #
+    # These were previously hardcoded to 0.0 everywhere - this is the
+    # real implementation. Both numbers answer the same question in two
+    # different ways: "if I perturb the input slightly, how much does
+    # the model's confidence in its OWN predicted class move around?"
+    # A stable/confident model barely moves; an uncertain one swings a
+    # lot. Neither method changes the reported prediction itself - they
+    # only estimate how much to trust it.
+    #
+    # NOTE ON "MC" (Monte Carlo): classic MC-Dropout requires the
+    # network to have been *trained* with a nonzero dropout rate so
+    # that switching dropout back on at test time samples from a
+    # distribution close to training. We checked the actual trained
+    # weights directly and every classification head here was trained
+    # with dropout p=0.0, so there is no learned dropout to reactivate
+    # - doing so would either do nothing (p=0) or inject noise the
+    # network never saw during training (misleading). Instead we use
+    # the standard practical substitute for that situation: Monte Carlo
+    # sampling under small random input perturbations (light Gaussian
+    # pixel noise, redrawn randomly on every pass) - genuinely
+    # stochastic, genuinely re-run through the real model each time,
+    # and a widely used stand-in when a network has no usable internal
+    # dropout.
+    # ======================================================
+
+    def _class_probability(self, results, class_name):
+        """Look up the model's own probability for a specific class
+        name in a single prediction result (not just its top-1)."""
+        if not results or results[0].probs is None:
+            return None
+        names = results[0].names
+        class_id = None
+        for cid, cname in names.items():
+            if cname == class_name:
+                class_id = cid
+                break
+        if class_id is None:
+            return None
+        return float(results[0].probs.data[class_id])
+
+    def mc_dropout_uncertainty(self, crop_type, image, class_name, n_passes=6, noise_std=6.0):
+        """Monte Carlo uncertainty via repeated random input perturbation.
+
+        Runs the SAME already-loaded classification model n_passes times
+        on the same image with a freshly-drawn random noise pattern each
+        time, and returns the standard deviation of how confident the
+        model was in the already-predicted class across those passes.
+        """
+        if crop_type not in self.classification_models:
+            return 0.0
+
+        model = self.classification_models[crop_type]
+
+        try:
+            base_array = np.array(image).astype(np.float32)
+        except Exception:
+            return 0.0
+
+        rng = np.random.default_rng()
+        probs = []
+
+        for _ in range(n_passes):
+            try:
+                noise = rng.normal(0.0, noise_std, base_array.shape)
+                noisy_array = np.clip(base_array + noise, 0, 255).astype(np.uint8)
+                noisy_image = Image.fromarray(noisy_array)
+
+                results = model.predict(
+                    noisy_image,
+                    imgsz=224,
+                    verbose=False,
+                    device=self.device
+                )
+
+                p = self._class_probability(results, class_name)
+
+                if p is not None:
+                    probs.append(p)
+
+            except Exception:
+                continue
+
+        if len(probs) < 2:
+            return 0.0
+
+        return float(np.std(probs))
+
+    def tta_uncertainty(self, crop_type, image, class_name, base_confidence):
+        """Test-Time Augmentation uncertainty via a fixed set of
+        standard augmentations (mirror, small rotations, brightness
+        jitter). Returns the standard deviation of how confident the
+        model was in the already-predicted class across those views
+        plus the original, unaugmented image.
+        """
+        if crop_type not in self.classification_models:
+            return 0.0
+
+        model = self.classification_models[crop_type]
+
+        try:
+            augmented_views = [
+                ImageOps.mirror(image),
+                image.rotate(8, fillcolor=(255, 255, 255)),
+                image.rotate(-8, fillcolor=(255, 255, 255)),
+                ImageEnhance.Brightness(image).enhance(0.85),
+                ImageEnhance.Brightness(image).enhance(1.15),
+            ]
+        except Exception:
+            return 0.0
+
+        probs = [base_confidence]
+
+        for view in augmented_views:
+            try:
+                results = model.predict(
+                    view,
+                    imgsz=224,
+                    verbose=False,
+                    device=self.device
+                )
+
+                p = self._class_probability(results, class_name)
+
+                if p is not None:
+                    probs.append(p)
+
+            except Exception:
+                continue
+
+        if len(probs) < 2:
+            return 0.0
+
+        return float(np.std(probs))
+
+    def estimate_uncertainty(self, crop_type, image, class_name, base_confidence):
+        """Runs both uncertainty estimates and fuses them into one
+        combined number (simple average) for the summary badge."""
+        mc = self.mc_dropout_uncertainty(crop_type, image, class_name)
+        tta = self.tta_uncertainty(crop_type, image, class_name, base_confidence)
+        fused = (mc + tta) / 2.0
+        return mc, tta, fused
+
     # ======================================================
     # MAIN PREDICTION
     # ======================================================
@@ -245,15 +420,16 @@ class InferencePipeline:
         model = self.models[crop_type]
 
         # ==================================================
-        # ARECANUT CLASSIFICATION
+        # CLASSIFICATION REFINEMENT (runs for any crop that has
+        # one loaded - currently Arecanut, Rice, and Corn)
         # ==================================================
 
         classification_result = None
 
-        if crop_type == "Arecanut":
+        if crop_type in self.classification_models:
 
             classification_result = (
-                self.classify_arecanut(image)
+                self.run_classification(crop_type, image)
             )
 
         # ==================================================
@@ -264,7 +440,13 @@ class InferencePipeline:
 
             results = model.predict(
                 image,
-                conf=0.25,
+                # Lowered from 0.25: at 0.25, any detection the model was
+                # less than 25% sure about was thrown away entirely, so a
+                # borderline-but-real detection produced "No object
+                # detected" instead of a low (but real) confidence result.
+                # This does not change the trained model or its weights —
+                # only how strict we are about accepting its output.
+                conf=0.10,
                 imgsz=640,
                 verbose=False,
                 device=self.device
@@ -288,8 +470,7 @@ class InferencePipeline:
         ):
 
             if (
-                crop_type == "Arecanut"
-                and classification_result
+                classification_result
                 and classification_result["class_name"] != "Unknown"
             ):
 
@@ -302,9 +483,15 @@ class InferencePipeline:
                     else "Diseased"
                 )
 
+                mc_uncertainty, tta_uncertainty, uncertainty_fused = (
+                    self.estimate_uncertainty(
+                        crop_type, image, disease, confidence
+                    )
+                )
+
                 return {
 
-                    "species": "Arecanut",
+                    "species": crop_type,
 
                     "species_conf": confidence,
 
@@ -320,14 +507,17 @@ class InferencePipeline:
 
                     "detection_conf": 0.0,
 
-                    "mc_uncertainty": 0.0,
+                    "detection_found": False,
 
-                    "tta_uncertainty": 0.0,
+                    "mc_uncertainty": mc_uncertainty,
 
-                    "uncertainty_fused": 0.0,
+                    "tta_uncertainty": tta_uncertainty,
+
+                    "uncertainty_fused": uncertainty_fused,
 
                     "model_used":
-                        "Arecanut Classification Model",
+                        f"{crop_type} Classification Model "
+                        f"(whole-image fallback - no region detected)",
 
                     "cropped_image": image,
 
@@ -405,35 +595,63 @@ class InferencePipeline:
         # FINAL DISEASE
         # ==================================================
 
+        # Whether the classification model's output is actually usable
+        # for this detection.
+        classification_applicable = False
+
+        classification_name = None
+        classification_confidence = None
+
+        have_classification = (
+            classification_result
+            and classification_result["class_name"] != "Unknown"
+        )
+
         if crop_type == "Arecanut":
 
-            classification_name = (
-                classification_result["class_name"]
-            )
+            # The Arecanut classifier is trained ONLY on nut images, so
+            # it must only be trusted when the detected region is
+            # actually a nut (see nut_related_detections above) -
+            # otherwise a leaf/trunk/foot/bud detection would get forced
+            # into an unrelated nut label.
+            if (
+                have_classification
+                and detection_disease in self.nut_related_detections
+            ):
 
-            classification_confidence = float(
-                classification_result["confidence"]
-            )
-
-            if classification_name != "Unknown":
+                classification_name = classification_result["class_name"]
+                classification_confidence = float(classification_result["confidence"])
 
                 disease = classification_name
                 disease_conf = classification_confidence
+                classification_applicable = True
 
             else:
 
                 disease = detection_disease
                 disease_conf = detection_confidence
 
+        elif have_classification:
+
+            # Rice / Corn (and any future crop with its own classifier):
+            # the detection model only ever finds leaves for these crops,
+            # so there is no "wrong body part" risk - the classifier's
+            # own read of the same cropped region is trusted directly as
+            # a second opinion, usually more specific/accurate than the
+            # detection model's own label.
+            classification_name = classification_result["class_name"]
+            classification_confidence = float(classification_result["confidence"])
+
+            disease = classification_name
+            disease_conf = classification_confidence
+            classification_applicable = True
+
         else:
 
+            # No classification model loaded/usable for this crop - fall
+            # back to the plain YOLO detection result.
             disease = detection_disease
             disease_conf = detection_confidence
-
-            classification_name = disease
-            classification_confidence = (
-                detection_confidence
-            )
 
         # ==================================================
         # STATUS
@@ -448,10 +666,30 @@ class InferencePipeline:
             plant_status = "Diseased"
 
         # ==================================================
+        # UNCERTAINTY (only meaningful when a classification model
+        # actually produced the disease above - otherwise there is no
+        # classifier probability distribution to re-probe, so these
+        # stay at 0.0 rather than estimating uncertainty from a model
+        # that isn't the one whose result we're reporting)
+        # ==================================================
+
+        if classification_applicable:
+
+            mc_uncertainty, tta_uncertainty, uncertainty_fused = (
+                self.estimate_uncertainty(
+                    crop_type, image, disease, disease_conf
+                )
+            )
+
+        else:
+
+            mc_uncertainty, tta_uncertainty, uncertainty_fused = 0.0, 0.0, 0.0
+
+        # ==================================================
         # RETURN
         # ==================================================
 
-        return {
+        response = {
 
             "species": crop_type,
 
@@ -463,26 +701,25 @@ class InferencePipeline:
             "disease_conf":
                 disease_conf,
 
-            "classification_result":
-                classification_name,
-
-            "classification_conf":
-                classification_confidence,
-
             "detection_result":
                 detection_disease,
 
             "detection_conf":
                 detection_confidence,
 
-            "mc_uncertainty": 0.0,
+            "detection_found": True,
 
-            "tta_uncertainty": 0.0,
+            "mc_uncertainty": mc_uncertainty,
 
-            "uncertainty_fused": 0.0,
+            "tta_uncertainty": tta_uncertainty,
 
-            "model_used":
-                f"YOLO11n + Classification Model - {crop_type}",
+            "uncertainty_fused": uncertainty_fused,
+
+            "model_used": (
+                f"YOLO11n + Classification Model - {crop_type}"
+                if classification_applicable
+                else f"YOLO11n Detection Only - {crop_type}"
+            ),
 
             "cropped_image":
                 cropped_image,
@@ -495,3 +732,14 @@ class InferencePipeline:
             "plant_status":
                 plant_status
         }
+
+        # Only surface a "Classification Result" section when the
+        # classifier's output was actually usable for this detection -
+        # otherwise the results page correctly omits that section
+        # instead of showing an unrelated nut label.
+        if classification_applicable:
+
+            response["classification_result"] = classification_name
+            response["classification_conf"] = classification_confidence
+
+        return response

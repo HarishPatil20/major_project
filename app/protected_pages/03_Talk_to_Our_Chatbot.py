@@ -1,7 +1,9 @@
 import streamlit as st
 
 from utils.llm_client import run_llm
+from utils.theme import apply_premium_theme
 
+apply_premium_theme()
 
 st.markdown(
     """

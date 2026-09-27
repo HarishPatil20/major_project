@@ -2,11 +2,15 @@ import streamlit as st
 
 from auth.database import create_help_request, get_advisers, get_farmer_help_requests
 from auth.session import get_current_user, is_farmer
+from utils.theme import apply_premium_theme
+from utils.live_refresh import live_fragment
 
 
 if not is_farmer():
     st.error("This page is available for farmer accounts.")
     st.stop()
+
+apply_premium_theme()
 
 user = get_current_user()
 
@@ -105,39 +109,56 @@ with st.container(border=True):
                 st.rerun()
 
 st.markdown('<div class="help-title">🧑‍🌾 Available Field Advisers</div>', unsafe_allow_html=True)
-advisers = get_advisers()
 
-if advisers:
-    cols = st.columns(min(3, len(advisers)))
-    for idx, adv in enumerate(advisers):
-        with cols[idx % len(cols)]:
-            st.markdown(
-                f"""
-                <div class="adviser-card">
-                    <div class="adviser-name">🧑‍🌾 {adv['full_name']}</div>
-                    <div class="adviser-spec">{adv['specialization']}</div>
-                    <div style="font-size:13px; color:#4A3525; margin-bottom:6px;">📍 {adv['location']} &nbsp;|&nbsp; 📞 {adv['phone']}</div>
-                    <div>
-                        <span class="adviser-tag">🌾 Crops: {adv['crops']}</span>
-                        <span class="adviser-tag">🦠 Diseases: {adv['diseases']}</span>
+
+@live_fragment("6s")
+def _render_advisers():
+    # Re-queried fresh on every tick, so an adviser the admin just added or
+    # edited shows up here without the farmer needing to reload the page.
+    advisers = get_advisers()
+
+    if advisers:
+        cols = st.columns(min(3, len(advisers)))
+        for idx, adv in enumerate(advisers):
+            with cols[idx % len(cols)]:
+                st.markdown(
+                    f"""
+                    <div class="adviser-card">
+                        <div class="adviser-name">🧑‍🌾 {adv['full_name']}</div>
+                        <div class="adviser-spec">{adv['specialization']}</div>
+                        <div style="font-size:13px; color:#4A3525; margin-bottom:6px;">📍 {adv['location']} &nbsp;|&nbsp; 📞 {adv['phone']}</div>
+                        <div>
+                            <span class="adviser-tag">🌾 Crops: {adv['crops']}</span>
+                            <span class="adviser-tag">🦠 Diseases: {adv['diseases']}</span>
+                        </div>
                     </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-else:
-    st.info("No adviser contacts listed yet. Admin can register advisers via the Admin Panel.")
+                    """,
+                    unsafe_allow_html=True
+                )
+    else:
+        st.info("No adviser contacts listed yet. Admin can register advisers via the Admin Panel.")
+
+
+_render_advisers()
 
 st.markdown('<div class="help-title">📋 My Submitted Queries & Answers</div>', unsafe_allow_html=True)
-requests = get_farmer_help_requests(user["id"])
+st.caption("🔄 Auto-refreshes every few seconds — an adviser's reply appears here without reloading the page.")
 
-if not requests:
-    st.info("You haven't submitted any adviser questions yet. Use the form above to submit your first question.")
-else:
+
+@live_fragment("4s")
+def _render_my_queries():
+    # Re-queried fresh on every tick, so an adviser's reply appears here
+    # within a few seconds of being saved on the Admin side.
+    requests = get_farmer_help_requests(user["id"])
+
+    if not requests:
+        st.info("You haven't submitted any adviser questions yet. Use the form above to submit your first question.")
+        return
+
     for req in requests:
         is_answered = req["status"] in ["Replied", "Answered"]
         badge_html = '<span class="badge-answered">Answered</span>' if is_answered else '<span class="badge-pending">Pending Review</span>'
-        
+
         with st.container(border=True):
             st.markdown(
                 f"""
@@ -150,7 +171,7 @@ else:
                 """,
                 unsafe_allow_html=True
             )
-            
+
             if req["reply"]:
                 st.markdown(
                     f"""
@@ -161,3 +182,6 @@ else:
                     """,
                     unsafe_allow_html=True
                 )
+
+
+_render_my_queries()

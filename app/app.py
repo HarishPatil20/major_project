@@ -29,6 +29,9 @@ from auth.session import (
 import os
 import runpy
 
+from utils.theme import apply_premium_theme
+from utils.i18n import t
+
 
 # ==========================================================
 # PAGE CONFIG
@@ -55,11 +58,9 @@ initialize_session()
 
 st.markdown(
     """
-<head>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-</head>
 <style>
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 :root {
     --primary-green: #1E5620;
     --primary-green-light: #2D7D32;
@@ -195,18 +196,24 @@ html, body, [class*="css"] {
     padding: 15px;
     border-radius: 8px;
     margin-top: 15px;
+    color: #2b3d2d;
 }
+.security-box * { color: #2b3d2d !important; }
 .protected-banner {
     background: #eaf6ec;
     border: 1px solid #b7d9bd;
     border-radius: 12px;
     padding: 18px;
     margin: 15px 0;
+    color: #1E5620;
 }
+.protected-banner * { color: #1E5620 !important; }
 </style>
 """,
     unsafe_allow_html=True,
 )
+
+apply_premium_theme()
 
 
 # ==========================================================
@@ -219,16 +226,20 @@ def show_authentication():
     # BRAND HEADER
     # ======================================================
 
-    hero_image = os.path.join(
+    assets_dir = os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
         "assets",
-        "welcome_page.png",
     )
 
-    image_data = ""
-    if os.path.exists(hero_image):
-        with open(hero_image, "rb") as image_file:
-            image_data = base64.b64encode(image_file.read()).decode("ascii")
+    image_data_uri = ""
+    for _hero_filename in ("hero_dashboard.jpg", "welcome_page.png"):
+        _candidate = os.path.join(assets_dir, _hero_filename)
+        if os.path.exists(_candidate):
+            _mime = "image/jpeg" if _hero_filename.endswith(".jpg") else "image/png"
+            with open(_candidate, "rb") as image_file:
+                _encoded = base64.b64encode(image_file.read()).decode("ascii")
+            image_data_uri = f"data:{_mime};base64,{_encoded}"
+            break
 
     st.markdown(
         f"""
@@ -236,7 +247,7 @@ def show_authentication():
         .stApp {{
             background:
                 linear-gradient(120deg, rgba(30, 86, 32, 0.94), rgba(45, 125, 65, 0.88)),
-                url(data:image/png;base64,{image_data});
+                url({image_data_uri});
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
@@ -248,11 +259,39 @@ def show_authentication():
         .login-brand p {{ color: #F5F5DC; margin: 6px 0 0; font-size: 15px; font-weight: 500; }}
         [data-testid="stTabs"] {{ background: rgba(255,255,255,0.95); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 20px; padding: 22px 26px 28px; box-shadow: 0 20px 50px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.6); }}
         [data-testid="stTabs"] [data-baseweb="tab-list"] {{ justify-content: center; gap: 14px; background: #f0f5f1; padding: 6px; border-radius: 12px; }}
-        [data-testid="stTabs"] button {{ color: #4A3525; font-weight: 700; border-radius: 9px; transition: all 0.2s ease; }}
+        [data-testid="stTabs"] button {{ color: #4A3525 !important; font-weight: 700; border-radius: 9px; transition: all 0.2s ease; }}
+        [data-testid="stTabs"] button p, [data-testid="stTabs"] button div, [data-testid="stTabs"] button span {{ color: #4A3525 !important; }}
         [data-testid="stTabs"] button[aria-selected="true"] {{ background: #ffffff !important; color: #1E5620 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }}
-        [data-testid="stTextInput"] input {{ border-radius: 10px; background: #fbfdfb; border: 1px solid #d4e3d6; font-family: inherit; }}
-        [data-testid="stButton"] button[kind="primary"] {{ background: linear-gradient(135deg, #1E5620 0%, #2D7D32 100%); border: 0; border-radius: 10px; min-height: 46px; font-weight: 800; font-size: 15px; box-shadow: 0 6px 18px rgba(30,86,32,0.25); }}
+        [data-testid="stTabs"] button[aria-selected="true"] p, [data-testid="stTabs"] button[aria-selected="true"] div, [data-testid="stTabs"] button[aria-selected="true"] span {{ color: #1E5620 !important; }}
+        [data-testid="stTabs"] h1, [data-testid="stTabs"] h2, [data-testid="stTabs"] h3, [data-testid="stTabs"] h4 {{ color: #1E5620 !important; }}
+        [data-testid="stTabs"] p, [data-testid="stTabs"] [data-testid="stMarkdownContainer"] p,
+        [data-testid="stTabs"] [data-testid="stCaptionContainer"], [data-testid="stTabs"] label,
+        [data-testid="stTabs"] [data-testid="stWidgetLabel"] p {{ color: #3d4a3f !important; }}
+        [data-testid="stTextInput"] input {{ border-radius: 10px; background: #fbfdfb; border: 1px solid #d4e3d6; font-family: inherit; color: #2b3d2d !important; }}
+        [data-testid="stButton"] button[kind="primary"] {{ background: linear-gradient(135deg, #1E5620 0%, #2D7D32 100%); border: 0; border-radius: 10px; min-height: 46px; font-weight: 800; font-size: 15px; box-shadow: 0 6px 18px rgba(30,86,32,0.25); color: #ffffff !important; }}
+        [data-testid="stButton"] button[kind="primary"] p, [data-testid="stButton"] button[kind="primary"] div {{ color: #ffffff !important; }}
+        [data-testid="stButton"] button[kind="secondary"] {{ background: #ffffff !important; color: #1E5620 !important; border: 1.5px solid #cfe3d2 !important; border-radius: 10px; min-height: 46px; font-weight: 700; font-size: 15px; }}
+        [data-testid="stButton"] button[kind="secondary"] p, [data-testid="stButton"] button[kind="secondary"] div {{ color: #1E5620 !important; }}
+        [data-testid="stButton"] button[kind="secondary"]:hover {{ background: #f3faf4 !important; border-color: #1E5620 !important; }}
         .login-security {{ background: #f0f7f1; color: #3e5e44; border-radius: 12px; padding: 12px 16px; margin-top: 18px; font-size: 13px; border-left: 4px solid #1E5620; display: flex; align-items: center; gap: 8px; }}
+        .login-security * {{ color: #3e5e44 !important; }}
+        .st-key-auth_light_box {{
+            background: rgba(255,255,255,0.97) !important;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: 20px;
+            padding: 24px clamp(18px, 3vw, 30px) 28px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+            border: 1px solid rgba(255,255,255,0.6);
+            max-width: 580px;
+            margin: 0 auto 24px;
+        }}
+        .st-key-auth_light_box, .st-key-auth_light_box p,
+        .st-key-auth_light_box label, .st-key-auth_light_box [data-testid="stWidgetLabel"] p,
+        .st-key-auth_light_box [data-testid="stMarkdownContainer"] p,
+        .st-key-auth_light_box [data-testid="stCaptionContainer"] {{ color: #3d4a3f !important; }}
+        .st-key-auth_light_box h2, .st-key-auth_light_box h3 {{ color: #1E5620 !important; }}
+        .st-key-auth_light_box [data-testid="stTextInput"] input {{ color: #1E5620 !important; background: #fbfdfb !important; }}
         .admin-login-head {{ text-align: center; padding: 10px 0 16px; }}
         .admin-login-icon {{ display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #1E5620, #2D7D32); color: #E5A93C; font-size: 32px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(30,86,32,0.3); }}
         .admin-login-title {{ color: #1E5620; font-size: 26px; font-weight: 800; }}
@@ -270,6 +309,93 @@ def show_authentication():
     )
 
     # ======================================================
+    # DEDICATED OTP VERIFICATION CARD (WHEN OTP IS PENDING)
+    # ======================================================
+
+    if st.session_state.get("otp_pending", False):
+
+        otp_mobile = st.session_state.get("otp_mobile", "")
+        otp_purpose = st.session_state.get("otp_purpose", "login")
+
+        info_msg = "Complete 2FA OTP verification to activate your account." if otp_purpose == "registration" else "Complete 2FA OTP verification to sign in to your account."
+
+        st.markdown(
+            f"""
+            <div style="background: rgba(255,255,255,0.97); backdrop-filter: blur(16px); border-radius: 20px; padding: 30px; box-shadow: 0 20px 50px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.6); max-width: 580px; margin: 0 auto 24px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, #1E5620, #2D7D32); color: #E5A93C; font-size: 32px; margin-bottom: 12px; box-shadow: 0 8px 24px rgba(30,86,32,0.3);">📱</div>
+                    <h2 style="color: #1E5620; font-size: 26px; font-weight: 800; margin: 0;">OTP Verification</h2>
+                    <p style="color: #6D4C41; font-size: 14px; margin-top: 6px;">{info_msg}</p>
+                    <div style="background: #f0f7f1; color: #1E5620; border-radius: 10px; padding: 8px 14px; display: inline-block; font-weight: 700; font-size: 13px; margin-top: 10px;">Mobile ending in: ****{otp_mobile[-4:]}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        with st.container(key="auth_light_box"):
+            otp_input = st.text_input(
+                "🔢 Enter 6-digit OTP",
+                max_chars=6,
+                placeholder="Enter OTP",
+                key="verification_otp",
+            )
+
+            if st.session_state.get("dev_otp"):
+                st.warning(f"🔑 Development mode OTP: **{st.session_state['dev_otp']}**")
+
+            st.write("")
+            col1, col2 = st.columns(2)
+
+            with col1:
+                if st.button(
+                    "✅ Verify OTP",
+                    type="primary",
+                    use_container_width=True,
+                    key="verify_login_otp_button",
+                ):
+                    if not otp_input.isdigit() or len(otp_input) != 6:
+                        st.error("Please enter a valid 6-digit OTP.")
+                    else:
+                        verified, message = verify_login_otp(otp_mobile, otp_input)
+
+                        if verified:
+                            user = get_user_by_mobile(otp_mobile)
+
+                            if user:
+                                allowed, status_msg = get_login_status(user)
+                                if not allowed:
+                                    st.session_state["dev_otp"] = None
+                                    st.session_state["otp_pending"] = False
+                                    st.session_state["otp_mobile"] = None
+                                    st.warning(f"✅ Mobile Verified! {status_msg}")
+                                else:
+                                    create_login_session(user)
+                                    st.session_state["dev_otp"] = None
+                                    st.session_state["otp_pending"] = False
+
+                                    st.success("Authentication successful!")
+                                    st.rerun()
+                            else:
+                                st.error("Unable to load the user account.")
+                        else:
+                            st.error(message)
+
+            with col2:
+                if st.button(
+                    "← Back to Login",
+                    use_container_width=True,
+                    key="cancel_login_otp_button",
+                ):
+                    st.session_state["otp_pending"] = False
+                    st.session_state["otp_mobile"] = None
+                    st.session_state["otp_purpose"] = None
+                    st.session_state["dev_otp"] = None
+                    st.rerun()
+
+        return
+
+    # ======================================================
     # FORGOT PASSWORD FLOW
     # ======================================================
 
@@ -283,6 +409,7 @@ def show_authentication():
 
         if st.session_state.get("reset_step", "mobile") == "mobile":
 
+          with st.container(key="auth_light_box"):
             st.markdown(
                 '<h2 class="reset-title">🔐 Reset Your Password</h2>',
                 unsafe_allow_html=True,
@@ -343,6 +470,7 @@ def show_authentication():
 
         elif st.session_state.get("reset_step") == "otp":
 
+          with st.container(key="auth_light_box"):
             st.markdown(
                 '<h2 class="reset-title">📱 OTP Verification</h2>',
                 unsafe_allow_html=True,
@@ -416,6 +544,7 @@ def show_authentication():
             and st.session_state.get("reset_verified", False)
         ):
 
+          with st.container(key="auth_light_box"):
             st.markdown(
                 '<h2 class="reset-title">🔑 Create New Password</h2>',
                 unsafe_allow_html=True,
@@ -754,78 +883,7 @@ def show_authentication():
                     else:
                         st.error(message)
 
-    # ======================================================
-    # LOGIN / REGISTRATION OTP
-    # ======================================================
 
-    if st.session_state.get("otp_pending", False):
-
-        st.markdown("---")
-        st.subheader("📱 OTP Verification")
-
-        otp_mobile = st.session_state.get("otp_mobile", "")
-        otp_purpose = st.session_state.get("otp_purpose", "login")
-
-        if otp_purpose == "registration":
-            st.info("Complete OTP verification to activate your new account.")
-        else:
-            st.info("Complete OTP verification to access your account.")
-
-        st.caption(f"Mobile ending in: ****{otp_mobile[-4:]}")
-
-        otp_input = st.text_input(
-            "Enter 6-digit OTP",
-            max_chars=6,
-            placeholder="Enter OTP",
-            key="verification_otp",
-        )
-
-        # Development mode
-        if st.session_state.get("dev_otp"):
-            st.warning(
-                "Development mode OTP: " + str(st.session_state["dev_otp"])
-            )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            if st.button(
-                "✅ Verify OTP",
-                type="primary",
-                use_container_width=True,
-                key="verify_login_otp_button",
-            ):
-                if not otp_input.isdigit() or len(otp_input) != 6:
-                    st.error("Please enter a valid 6-digit OTP.")
-                else:
-                    verified, message = verify_login_otp(otp_mobile, otp_input)
-
-                    if verified:
-                        user = get_user_by_mobile(otp_mobile)
-
-                        if user:
-                            create_login_session(user)
-                            st.session_state["dev_otp"] = None
-                            st.session_state["otp_pending"] = False
-
-                            st.success("Authentication successful!")
-                            st.rerun()
-                        else:
-                            st.error("Unable to load the user account.")
-                    else:
-                        st.error(message)
-
-        with col2:
-            if st.button(
-                "Cancel Verification",
-                use_container_width=True,
-                key="cancel_login_otp_button",
-            ):
-                st.session_state["otp_pending"] = False
-                st.session_state["otp_mobile"] = None
-                st.session_state["otp_purpose"] = None
-                st.session_state["dev_otp"] = None
-                st.rerun()
 
 
 # ==========================================================
@@ -946,11 +1004,11 @@ section[data-testid="stSidebar"] .block-container {
     .sidebar-title { font-size: 17px; }
 }
 .dashboard-header {
-    background: linear-gradient(135deg, #176b2c 0%, #2e8b45 100%);
+    background: linear-gradient(120deg, #176b2c 0%, #2e8b45 65%, #E5A93C 130%);
     border-radius: 18px;
     padding: 25px 30px;
     margin-bottom: 24px;
-    box-shadow: 0 8px 25px rgba(23,107,44,0.16);
+    box-shadow: 0 10px 28px rgba(23,107,44,0.20);
 }
 .dashboard-title {
     color: #ffffff;
@@ -1025,7 +1083,7 @@ section[data-testid="stSidebar"] .block-container {
         st.sidebar.markdown(
             f"""
 <div class="user-card">
-<div class="user-label">Signed in as</div>
+<div class="user-label">{t('signed_in_as')}</div>
 <div class="user-name">👤 {full_name}</div>
 <div class="user-role">{role_line}</div>
 </div>
@@ -1038,7 +1096,9 @@ section[data-testid="stSidebar"] .block-container {
     # ======================================================
 
     if "active_page" not in st.session_state:
-        st.session_state["active_page"] = "Dashboard"
+        st.session_state["active_page"] = "Admin Panel" if is_admin() else "Dashboard"
+    elif is_admin() and st.session_state.get("active_page") == "Dashboard":
+        st.session_state["active_page"] = "Admin Panel"
 
     def navigation_button(label, page, key):
         clicked = st.sidebar.button(
@@ -1051,37 +1111,38 @@ section[data-testid="stSidebar"] .block-container {
             st.session_state["active_page"] = page
             st.rerun()
 
-    st.sidebar.markdown('<div class="nav-section">Workspace</div>', unsafe_allow_html=True)
-    navigation_button("⌂  Dashboard", "Dashboard", "nav_dashboard")
+    st.sidebar.markdown(f'<div class="nav-section">{t("nav_workspace")}</div>', unsafe_allow_html=True)
+    navigation_button(t("nav_dashboard"), "Dashboard", "nav_dashboard")
 
-    st.sidebar.markdown('<div class="nav-section">Crop Intelligence</div>', unsafe_allow_html=True)
-    navigation_button("🌿  Supported Species", "Supported Species", "nav_species")
-    navigation_button("🔍  Disease Detection", "Disease Detection", "nav_detection")
+    st.sidebar.markdown(f'<div class="nav-section">{t("nav_crop_intel")}</div>', unsafe_allow_html=True)
+    navigation_button(t("nav_species"), "Supported Species", "nav_species")
+    navigation_button(t("nav_detection"), "Disease Detection", "nav_detection")
 
-    st.sidebar.markdown('<div class="nav-section">AI Tools</div>', unsafe_allow_html=True)
-    navigation_button("🤖  Farmer Assistant", "Crop Assistant", "nav_crop_assistant")
+    st.sidebar.markdown(f'<div class="nav-section">{t("nav_ai_tools")}</div>', unsafe_allow_html=True)
+    navigation_button(t("nav_assistant"), "Crop Assistant", "nav_crop_assistant")
     if not is_admin():
-        navigation_button("💬  Ask an Adviser", "Ask an Adviser", "nav_ask_adviser")
+        navigation_button(t("nav_field_advisor"), "Field Advisor", "nav_field_advisor")
+        navigation_button(t("nav_ask_adviser"), "Ask an Adviser", "nav_ask_adviser")
 
-    st.sidebar.markdown('<div class="nav-section">Live Farm Insights</div>', unsafe_allow_html=True)
-    navigation_button("☀  Weather", "Weather", "nav_weather")
-    navigation_button("📈  Market Prices", "Market Prices", "nav_market")
+    st.sidebar.markdown(f'<div class="nav-section">{t("nav_insights")}</div>', unsafe_allow_html=True)
+    navigation_button(t("nav_weather"), "Weather", "nav_weather")
+    navigation_button(t("nav_market"), "Market Prices", "nav_market")
 
     if is_admin():
-        st.sidebar.markdown('<div class="nav-section">Administration</div>', unsafe_allow_html=True)
-        navigation_button("🛡️  Admin Panel", "Admin Panel", "nav_admin_panel")
+        st.sidebar.markdown(f'<div class="nav-section">{t("nav_admin_section")}</div>', unsafe_allow_html=True)
+        navigation_button(t("nav_admin_panel"), "Admin Panel", "nav_admin_panel")
 
     # ======================================================
     # ACCOUNT
     # ======================================================
 
     st.sidebar.markdown(
-        '<div class="nav-section">⚙️ Account</div>',
+        f'<div class="nav-section">{t("account")}</div>',
         unsafe_allow_html=True,
     )
 
     if st.sidebar.button(
-        "🚪 Sign Out",
+        t("sign_out"),
         use_container_width=True,
         key="main_logout_button",
     ):
@@ -1103,6 +1164,7 @@ section[data-testid="stSidebar"] .block-container {
         "Supported Species": "01_Supported_Species_Info.py",
         "Disease Detection": "02_Upload_and_Classify.py",
         "Crop Assistant": "03_Talk_to_Our_Chatbot.py",
+        "Field Advisor": "09_Field_Advisor.py",
         "Ask an Adviser": "08_Ask_An_Adviser.py",
         "Weather": "05_Live_Weather.py",
         "Market Prices": "06_Live_Market_Prices.py",

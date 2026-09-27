@@ -1,9 +1,14 @@
 import os
+import time
 import requests
+import textwrap
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 from pathlib import Path
+from utils.theme import apply_premium_theme
+
+apply_premium_theme()
 
 # =========================================================
 # CONFIG
@@ -285,18 +290,17 @@ div[data-testid="stSelectbox"] > div > div {
 # =========================================================
 
 st.markdown(
-    """
-    <div class="market-header">
-
-        <h1>📈 Live Market Intelligence</h1>
-
-        <p>
-            Government-sourced mandi prices to help farmers
-            compare markets and make better selling decisions.
-        </p>
-
-    </div>
-    """,
+    textwrap.dedent(
+        """
+        <div class="market-header">
+            <h1>📈 Live Market Intelligence</h1>
+            <p>
+                Government-sourced mandi prices to help farmers
+                compare markets and make better selling decisions.
+            </p>
+        </div>
+        """
+    ),
     unsafe_allow_html=True
 )
 
@@ -304,8 +308,24 @@ st.markdown(
 # API FUNCTION
 # =========================================================
 
+class MarketDataError(Exception):
+    """Raised on any failed fetch_market_data() call.
+
+    IMPORTANT: st.cache_data caches whatever a function RETURNS -
+    including an error dict. The old version of this function returned
+    a {"success": False, ...} dict on failure, so once a single slow
+    Rice query timed out, Streamlit cached that FAILURE for the full
+    10-minute ttl, and every subsequent Rice search replayed the same
+    stale timeout error for 10 minutes instead of retrying the real
+    API. Streamlit does NOT cache a call that raises an exception, so
+    failures now raise instead of return, and only a genuine success
+    ever gets cached.
+    """
+    pass
+
+
 @st.cache_data(ttl=600, show_spinner=False)
-def fetch_market_data(
+def _fetch_market_data_cached(
     commodity=None,
     state=None,
     district=None,
@@ -314,14 +334,10 @@ def fetch_market_data(
 ):
 
     if not API_KEY:
-
-        return {
-            "success": False,
-            "message": (
-                "Government API key is missing. "
-                "Please check INDIA_GOV_API_KEY in your .env file."
-            )
-        }
+        raise MarketDataError(
+            "Government API key is missing. "
+            "Please check INDIA_GOV_API_KEY in your .env file."
+        )
 
     params = {
         "api-key": API_KEY,
@@ -341,60 +357,108 @@ def fetch_market_data(
     if market:
         params["filters[market]"] = market
 
-    try:
+    # The Government API (api.data.gov.in) is known to be slow/flaky
+    # under load, and Rice in particular tends to return large result
+    # sets that take longer to respond. We give it a longer timeout AND
+    # retry up to 3 attempts with backoff before giving up, since a
+    # later attempt frequently succeeds where an earlier one timed out.
+    # This does not change what data is shown — only how hard we try to
+    # actually fetch it before raising an error.
+    last_error = None
 
-        response = requests.get(
-            API_URL,
-            params=params,
-            timeout=20
-        )
+    for attempt in range(3):
 
-        if response.status_code != 200:
+        try:
 
-            return {
-                "success": False,
-                "message": (
+            response = requests.get(
+                API_URL,
+                params=params,
+                timeout=45
+            )
+
+            if response.status_code == 200:
+
+                data = response.json()
+
+                records = data.get("records", [])
+
+                return {
+                    "success": True,
+                    "records": records,
+                    "total": data.get("total", len(records))
+                }
+
+            if 500 <= response.status_code < 600:
+                # Server-side error - may well resolve itself on retry.
+                last_error = (
                     f"Government market API returned "
                     f"HTTP {response.status_code}."
                 )
-            }
+            else:
+                # 4xx (bad key/params) won't fix itself on retry.
+                raise MarketDataError(
+                    f"Government market API returned "
+                    f"HTTP {response.status_code}."
+                )
 
-        data = response.json()
+        except requests.exceptions.Timeout:
 
-        records = data.get("records", [])
-
-        return {
-            "success": True,
-            "records": records,
-            "total": data.get("total", len(records))
-        }
-
-    except requests.exceptions.Timeout:
-
-        return {
-            "success": False,
-            "message": (
-                "Market data service timed out. "
-                "Please try again."
+            last_error = (
+                "Market data service timed out. Larger commodities "
+                "like Rice can take longer to respond from the "
+                "Government server."
             )
-        }
 
-    except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError:
 
-        return {
-            "success": False,
-            "message": (
+            last_error = (
                 "Unable to connect to Government market "
                 "data service."
             )
-        }
 
-    except Exception as e:
+        except MarketDataError:
+            raise
 
+        except Exception as e:
+
+            last_error = f"Market data error: {e}"
+
+        if attempt < 2:
+            time.sleep(3)
+
+    raise MarketDataError(
+        last_error
+        or "Market data service is currently unavailable. "
+           "Please try again."
+    )
+
+
+def fetch_market_data(
+    commodity=None,
+    state=None,
+    district=None,
+    market=None,
+    limit=1000
+):
+    """Uncached wrapper: catches MarketDataError and converts it back
+    into the {"success": False, "message": ...} shape the rest of this
+    page already expects, so no call site below needs to change.
+    """
+    try:
+        return _fetch_market_data_cached(
+            commodity=commodity,
+            state=state,
+            district=district,
+            market=market,
+            limit=limit
+        )
+    except MarketDataError as e:
         return {
             "success": False,
-            "message": f"Market data error: {e}"
+            "message": str(e)
         }
+
+    return last_error
 
 
 # =========================================================
@@ -438,16 +502,18 @@ if not st.session_state["market_loaded"] and st.session_state["market_records"] 
 # =========================================================
 
 st.markdown(
-    """
-    <div class="search-intro">
-        <div>
-            <div class="search-title">Find today’s mandi prices</div>
-            <div class="search-subtitle">Choose any combination of filters. Use All to compare a wider area.</div>
+    textwrap.dedent(
+        """
+        <div class="search-intro">
+            <div>
+                <div class="search-title">Find today’s mandi prices</div>
+                <div class="search-subtitle">Choose any combination of filters. Use All to compare a wider area.</div>
+            </div>
+            <div class="search-status">● Official data</div>
         </div>
-        <div class="search-status">● Official data</div>
-    </div>
-    <div class="filter-label">Search filters</div>
-    """,
+        <div class="filter-label">Search filters</div>
+        """
+    ),
     unsafe_allow_html=True
 )
 
@@ -471,23 +537,17 @@ with col2:
         key="market_state",
     )
 
-col3, col4 = st.columns(2)
+district = st.selectbox(
+    "📍 District",
+    option_values(available_records, "district", COMMON_DISTRICTS),
+    key="market_district",
+)
 
-with col3:
-
-    district = st.selectbox(
-        "📍 District",
-        option_values(available_records, "district", COMMON_DISTRICTS),
-        key="market_district",
-    )
-
-with col4:
-
-    market = st.selectbox(
-        "🏪 Market / Mandi",
-        option_values(available_records, "market", COMMON_MANDIS),
-        key="market_name",
-    )
+# NOTE: The separate "Market / Mandi" selector was removed — picking a
+# District already narrows results enough, and requiring both was
+# confusing and over-filtered results down to nothing. Prices for every
+# market/mandi within the chosen district are still shown below.
+market = None
 
 st.divider()
 
@@ -509,7 +569,7 @@ with clear_col:
     )
 
 selected_labels = [
-    value for value in [commodity, state, district, market]
+    value for value in [commodity, state, district]
     if value != "All"
 ]
 filter_summary = " · ".join(selected_labels) if selected_labels else "Showing all available markets"
@@ -538,7 +598,7 @@ if search_clicked:
         "commodity": None if commodity == "All" else commodity,
         "state": None if state == "All" else state,
         "district": None if district == "All" else district,
-        "market": None if market == "All" else market
+        "market": None
     }
 
     with st.spinner(
@@ -619,11 +679,13 @@ if records:
     # =====================================================
 
     st.markdown(
-        """
-        <span class="status-live">
-            ● OFFICIAL MARKET DATA
-        </span>
-        """,
+        textwrap.dedent(
+            """
+            <span class="status-live">
+                ● OFFICIAL MARKET DATA
+            </span>
+            """
+        ),
         unsafe_allow_html=True
     )
 
@@ -675,25 +737,16 @@ if records:
         )
 
         st.markdown(
-            f"""
-            <div class="price-card">
-
-                <div class="price-icon">💰</div>
-
-                <div class="price-label">
-                    Average Modal Price
+            textwrap.dedent(
+                f"""
+                <div class="price-card">
+                    <div class="price-icon">💰</div>
+                    <div class="price-label">Average Modal Price</div>
+                    <div class="price-value">{value}</div>
+                    <div class="price-unit">per quintal</div>
                 </div>
-
-                <div class="price-value">
-                    {value}
-                </div>
-
-                <div class="price-unit">
-                    per quintal
-                </div>
-
-            </div>
-            """,
+                """
+            ),
             unsafe_allow_html=True
         )
 
@@ -706,25 +759,16 @@ if records:
         )
 
         st.markdown(
-            f"""
-            <div class="price-card">
-
-                <div class="price-icon">📉</div>
-
-                <div class="price-label">
-                    Lowest Market Price
+            textwrap.dedent(
+                f"""
+                <div class="price-card">
+                    <div class="price-icon">📉</div>
+                    <div class="price-label">Lowest Market Price</div>
+                    <div class="price-value">{value}</div>
+                    <div class="price-unit">minimum price</div>
                 </div>
-
-                <div class="price-value">
-                    {value}
-                </div>
-
-                <div class="price-unit">
-                    minimum price
-                </div>
-
-            </div>
-            """,
+                """
+            ),
             unsafe_allow_html=True
         )
 
@@ -737,50 +781,32 @@ if records:
         )
 
         st.markdown(
-            f"""
-            <div class="price-card">
-
-                <div class="price-icon">📈</div>
-
-                <div class="price-label">
-                    Highest Market Price
+            textwrap.dedent(
+                f"""
+                <div class="price-card">
+                    <div class="price-icon">📈</div>
+                    <div class="price-label">Highest Market Price</div>
+                    <div class="price-value">{value}</div>
+                    <div class="price-unit">maximum price</div>
                 </div>
-
-                <div class="price-value">
-                    {value}
-                </div>
-
-                <div class="price-unit">
-                    maximum price
-                </div>
-
-            </div>
-            """,
+                """
+            ),
             unsafe_allow_html=True
         )
 
     with c4:
 
         st.markdown(
-            f"""
-            <div class="price-card">
-
-                <div class="price-icon">🏪</div>
-
-                <div class="price-label">
-                    Markets Found
+            textwrap.dedent(
+                f"""
+                <div class="price-card">
+                    <div class="price-icon">🏪</div>
+                    <div class="price-label">Markets Found</div>
+                    <div class="price-value">{market_count}</div>
+                    <div class="price-unit">market locations</div>
                 </div>
-
-                <div class="price-value">
-                    {market_count}
-                </div>
-
-                <div class="price-unit">
-                    market locations
-                </div>
-
-            </div>
-            """,
+                """
+            ),
             unsafe_allow_html=True
         )
 
@@ -807,28 +833,17 @@ if records:
             best_price = best_row["modal_price"]
 
             st.markdown(
-                f"""
-                <div class="best-market">
-
-                    <div class="best-market-title">
-                        🏆 Highest Modal Price Found
+                textwrap.dedent(
+                    f"""
+                    <div class="best-market">
+                        <div class="best-market-title">🏆 Highest Modal Price Found</div>
+                        <div class="best-market-name">{best_market_name}</div>
+                        <div style="color:#5d6b60; margin-top:5px;">
+                            Modal price: <b>₹{best_price:,.0f}</b> per quintal
+                        </div>
                     </div>
-
-                    <div class="best-market-name">
-                        {best_market_name}
-                    </div>
-
-                    <div style="
-                        color:#5d6b60;
-                        margin-top:5px;
-                    ">
-                        Modal price:
-                        <b>₹{best_price:,.0f}</b>
-                        per quintal
-                    </div>
-
-                </div>
-                """,
+                    """
+                ),
                 unsafe_allow_html=True
             )
 
@@ -953,32 +968,21 @@ if records:
     # =====================================================
 
     st.markdown(
-        """
-        <div class="info-box">
-
-            <b>💡 How to read the prices</b>
-
-            <br><br>
-
-            <b>Min Price</b> – lowest reported wholesale price.
-
-            <br>
-
-            <b>Max Price</b> – highest reported wholesale price.
-
-            <br>
-
-            <b>Modal Price</b> – the modal/most representative
-            reported market price.
-
-            <br><br>
-
-            Use market comparison as decision support;
-            actual selling price may vary based on quality,
-            variety, grade, quantity and local conditions.
-
-        </div>
-        """,
+        textwrap.dedent(
+            """
+            <div class="info-box">
+                <b>💡 How to read the prices</b>
+                <br><br>
+                <b>Min Price</b> – lowest reported wholesale price.
+                <br>
+                <b>Max Price</b> – highest reported wholesale price.
+                <br>
+                <b>Modal Price</b> – the modal/most representative reported market price.
+                <br><br>
+                Use market comparison as decision support; actual selling price may vary based on quality, variety, grade, quantity and local conditions.
+            </div>
+            """
+        ),
         unsafe_allow_html=True
     )
 
@@ -987,39 +991,25 @@ if records:
     # =====================================================
 
     st.markdown(
-        """
-        <div class="source-box">
-
-            <b>🇮🇳 Official Data Source</b>
-
-            <br><br>
-
-            Government of India –
-            Open Government Data (OGD) Platform
-
-            <br>
-
-            Department of Agriculture & Farmers Welfare
-
-            <br>
-
-            Directorate of Marketing & Inspection (DMI)
-
-            <br><br>
-
-            <b>Dataset:</b>
-            Current Daily Price of Various Commodities
-            from Various Markets (Mandi)
-
-            <br><br>
-
-            <span style="color:#68756d;">
-            Market data is published daily and may not represent
-            second-by-second real-time prices.
-            </span>
-
-        </div>
-        """,
+        textwrap.dedent(
+            """
+            <div class="source-box">
+                <b>🇮🇳 Official Data Source</b>
+                <br><br>
+                Government of India – Open Government Data (OGD) Platform
+                <br>
+                Department of Agriculture & Farmers Welfare
+                <br>
+                Directorate of Marketing & Inspection (DMI)
+                <br><br>
+                <b>Dataset:</b> Current Daily Price of Various Commodities from Various Markets (Mandi)
+                <br><br>
+                <span style="color:#68756d;">
+                Market data is published daily and may not represent second-by-second real-time prices.
+                </span>
+            </div>
+            """
+        ),
         unsafe_allow_html=True
     )
 
@@ -1067,23 +1057,15 @@ if records:
 elif st.session_state["market_loaded"]:
 
     st.markdown(
-        """
-        <div class="empty-state">
-
-            <div class="empty-icon">
-                📊
+        textwrap.dedent(
+            """
+            <div class="empty-state">
+                <div class="empty-icon">📊</div>
+                <h2 style="color:#2E7D32;">No Market Data Found</h2>
+                <p style="color:#68756D;">Try a broader commodity, state or district.</p>
             </div>
-
-            <h2 style="color:#2E7D32;">
-                No Market Data Found
-            </h2>
-
-            <p style="color:#68756D;">
-                Try a broader commodity, state or district.
-            </p>
-
-        </div>
-        """,
+            """
+        ),
         unsafe_allow_html=True
     )
 
@@ -1095,23 +1077,16 @@ elif st.session_state["market_loaded"]:
 else:
 
     st.markdown(
-        """
-        <div class="empty-state">
-
-            <div class="empty-icon">
-                🌾
+        textwrap.dedent(
+            """
+            <div class="empty-state">
+                <div class="empty-icon">🌾</div>
+                <h2 style="color:#2E7D32;">Explore Agricultural Market Prices</h2>
+                <p style="color:#68756D;">
+                    Search for a commodity and location to view official Government mandi price data.
+                </p>
             </div>
-
-            <h2 style="color:#2E7D32;">
-                Explore Agricultural Market Prices
-            </h2>
-
-            <p style="color:#68756D;">
-                Search for a commodity and location to view
-                official Government mandi price data.
-            </p>
-
-        </div>
-        """,
+            """
+        ),
         unsafe_allow_html=True
     )
